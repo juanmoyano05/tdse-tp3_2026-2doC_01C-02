@@ -35,3 +35,62 @@ Finalmente, une el código generado con el proyecto de tu microcontrolador:
 
 
 Para ayudarte a desarrollar partes específicas del código o del modelo, necesito saber qué herramientas estás utilizando.
+
+---
+
+Prompt: Analizar y explicar (en español), el funcionamiento del código fuente contenido en los archivos adjuntos:
+app.c, app_it.c, systick.c, task_test_attribute.h, task_test.c, task_display_attribute.h,
+task_display_interface.c, task_display.c, display.h y display.c.
+Indicar el comportamiento de las funciones void task_test_statechart(void) y void
+task_display_statechart(void).
+
+El sistema presentado es un entorno de ejecución bare-metal basado en eventos (Event-Triggered System), donde el código se actualiza periódicamente mediante un contador de tiempo (SysTick) con un período típico de 1 milisegundo.
+
+## Análisis de la Arquitectura y Archivos
+
+* **app.c y app_it.c:** Estos archivos conforman el núcleo del planificador y la gestión de interrupciones. El archivo `app.c` contiene el bucle principal (`app_update`) que evalúa cuándo ejecutar las tareas e instrumenta sus tiempos de ejecución (calculando métricas como NOE, LET, BCET y WCET). El archivo `app_it.c` atiende las interrupciones de hardware, incrementando un contador de "ticks" base a través de `HAL_SYSTICK_Callback`.
+
+
+* **systick.c:** Proporciona un mecanismo de retardo bloqueante en microsegundos (`systick_delay_us`) leyendo directamente el registro de conteo del hardware SysTick.
+
+
+* **display.h y display.c:** Implementan el controlador (driver) de bajo nivel para un panel LCD alfanumérico. Permiten inicializar el hardware en modos de conexión de 4 u 8 bits, posicionar el cursor físico (`displayCharPositionWrite`) y enviar cadenas de texto enviando los bytes pertinentes por los pines GPIO configurados (`displayStringWrite`).
+
+
+* **task_display_interface.c:** Actúa como un puente de comunicación para encapsular las solicitudes de impresión en la pantalla. Expone la función `put_event_task_display`, la cual escribe cadenas de texto en un búfer virtual de memoria de pantalla (`ddram`) y levanta una bandera lógica (evento `EV_DSP_UPDATE` y `flag = true`) para notificar que existen nuevos datos.
+
+
+* **task_display_attribute.h y task_test_attribute.h:** Archivos de cabecera que definen las estructuras de estado y almacenamiento. Contienen la definición de la memoria RAM virtual del display configurada como 2 filas por 16 columnas (`ddram`), así como las variables de temporización (`tick` y `counter`) para la tarea de prueba.
+
+
+
+## Comportamiento de `task_test_statechart(void)`
+
+Esta función actúa como el generador de estímulos principal para probar la escritura en el display:
+
+* Cada vez que se ejecuta, incrementa en uno el registro `counter` alojado en su estructura de datos `task_test_dta`.
+
+
+* Implementa un temporizador no bloqueante por software utilizando una variable `tick` que disminuye su valor en cada ciclo hasta llegar a cero, partiendo de un valor máximo de retardo.
+
+
+* Al alcanzar el límite del temporizador (`tick` de 0), restablece su valor inicial al máximo y ejecuta una rutina de actualización visual.
+
+
+* Durante esta rutina, envía el mensaje base `"Test Nro: ******"` a la segunda fila del display y luego sobrescribe la posición numérica final enviando el número de prueba formateado (usando `snprintf`) a través de la función puente `put_event_task_display()`.
+
+
+
+## Comportamiento de `task_display_statechart(void)`
+
+Esta función conforma la máquina de estados finitos que administra la escritura real en el hardware del LCD de forma no bloqueante:
+
+* **Estado `ST_DSP_IDLE`:** Es el estado de reposo. La máquina de estados evalúa continuamente si la variable `flag` es verdadera y si el evento reportado coincide con `EV_DSP_UPDATE`. Si estas condiciones se cumplen, la FSM transiciona al estado `ST_DSP_UPDATE`.
+
+
+* **Estado `ST_DSP_UPDATE`:** Aquí se realiza el volcado de datos de la memoria virtual al hardware físico. Primero reinicia la variable de aviso (`flag = false`). A continuación, posiciona secuencialmente el cursor del driver en el inicio de la primera fila y escribe el búfer de la fila 0, seguido por el posicionamiento del cursor en la segunda fila y la escritura del búfer correspondiente a la fila 1. Finalmente, devuelve el control del estado a `ST_DSP_IDLE`.
+
+
+* **Condición por defecto (`default`):** Existe un mecanismo de protección que fuerza el retorno al estado inactivo (`ST_DSP_IDLE`), reiniciando las banderas y retardos a valores mínimos de seguridad en caso de una ejecución anómala.
+
+

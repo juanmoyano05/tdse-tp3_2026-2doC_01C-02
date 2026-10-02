@@ -93,4 +93,7 @@ Esta función conforma la máquina de estados finitos que administra la escritur
 
 * **Condición por defecto (`default`):** Existe un mecanismo de protección que fuerza el retorno al estado inactivo (`ST_DSP_IDLE`), reiniciando las banderas y retardos a valores mínimos de seguridad en caso de una ejecución anómala.
 
+<img width="1200" height="1600" alt="WhatsApp Image 2026-10-02 at 10 25 05 (1)" src="https://github.com/user-attachments/assets/6d61df1f-f750-40ad-b203-7f8248f1dd2c" />
+
+<img width="1600" height="1200" alt="WhatsApp Image 2026-10-02 at 10 25 05" src="https://github.com/user-attachments/assets/87ce862f-a528-4525-a333-07749c79d4f8" />
 
